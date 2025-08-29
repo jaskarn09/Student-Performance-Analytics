@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Performance Analytics Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+ <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="header">
+            <h1>Student Performance Analytics</h1>
+            <div class="subtitle">Advanced Academic Data Analysis & Insights</div>
+            <div style="margin-top: 20px;">
+                <div class="connection-status status-disconnected" id="connectionStatus">
+                    Not Connected
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Section -->
+        <div class="connection-section">
+            <h2 style="margin-bottom: 20px; color: #1e293b;">Data Source Connection</h2>
+            
+            <div class="setup-instructions">
+                <h3 style="margin-bottom: 15px; color: #1e293b;">Google Sheets Setup Instructions:</h3>
+                <div class="setup-step">
+                    <strong>Step 1:</strong> Open your Google Sheet → <strong>File → Share → Publish to web</strong>
+                </div>
+                <div class="setup-step">
+                    <strong>Step 2:</strong> Select <strong>"Comma-separated values (.csv)"</strong> and click <strong>"Publish"</strong>
+                </div>
+                <div class="setup-step">
+                    <strong>Step 3:</strong> Copy the CSV link (should end with &output=csv) and paste below
+                </div>
+                <div class="setup-step">
+                    <strong>Note:</strong> Your sheet must be publicly accessible for this to work
+                </div>
+            </div>
+
+            <div id="errorMessage" class="error-message"></div>
+            <div id="successMessage" class="success-message"></div>
+            
+            <input type="text" class="url-input" id="sheetUrl" 
+                   placeholder="Paste your Google Sheets CSV URL here (must end with &output=csv)...">
+            
+            <div style="margin-bottom: 20px;">
+                <button class="button connect-btn" onclick="connectToSheet()">
+                    Connect to Google Sheets
+                </button>
+                <button class="button refresh-btn" onclick="refreshData()" id="refreshBtn" disabled>
+                    Refresh Data
+                </button>
+                <input type="file" id="csvFile" class="file-input" accept=".csv" onchange="handleFileUpload(event)">
+                <button class="button file-upload" onclick="document.getElementById('csvFile').click()">
+                    Upload CSV File
+                </button>
+                <button class="button sample-btn" onclick="loadSampleData()">
+                    Try Sample Data
+                </button>
+            </div>
+            
+            <div class="auto-refresh">
+                <label class="switch">
+                    <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+                    <span class="slider"></span>
+                </label>
+                <label for="autoRefresh" style="font-weight: 600;">Auto-refresh every 30 seconds</label>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <h3>Processing Data...</h3>
+            <p>Analyzing student performance metrics...</p>
+        </div>
+
+        <!-- Data Summary -->
+        <div class="data-summary" id="dataSummary" style="display: none;">
+            <h2 style="margin-bottom: 20px; color: #1e293b;">Data Overview</h2>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-number" id="totalRecords">0</div>
+                    <div class="summary-label">Total Records</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number" id="totalStudents">0</div>
+                    <div class="summary-label">Students</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number" id="totalSubjects">0</div>
+                    <div class="summary-label">Subjects</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number" id="dataQuality">0%</div>
+                    <div class="summary-label">Data Quality</div>
+                </div>
+            </div>
+            <div class="last-updated" id="lastUpdated">
+                Last updated: Never
+            </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid" id="kpiSection" style="display: none;">
+            <div class="kpi-card primary">
+                <div class="kpi-value" id="avgGPA">-</div>
+                <div class="kpi-label">Average GPA</div>
+            </div>
+            <div class="kpi-card success">
+                <div class="kpi-value" id="attendanceRate">-</div>
+                <div class="kpi-label">Attendance Rate</div>
+            </div>
+            <div class="kpi-card warning">
+                <div class="kpi-value" id="passRate">-</div>
+                <div class="kpi-label">Pass Rate</div>
+            </div>
+            <div class="kpi-card danger">
+                <div class="kpi-value" id="atRiskCount">-</div>
+                <div class="kpi-label">At-Risk Students</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="chart-grid" id="chartsSection" style="display: none;">
+            <div class="chart-container">
+                <div class="chart-title">Grade Distribution Analysis</div>
+                <canvas id="gradeChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">Subject Performance Comparison</div>
+                <canvas id="subjectChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-grid" id="chartsSection2" style="display: none;">
+            <div class="chart-container">
+                <div class="chart-title">Attendance vs Performance Correlation</div>
+                <canvas id="correlationChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">Student Risk Assessment</div>
+                <canvas id="riskChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Insights -->
+        <div class="insights-section" id="insightsSection" style="display: none;">
+            <div class="insights-title">Academic Performance Insights</div>
+            <div id="insightsList">
+                <!-- Insights will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentSheetUrl = '';
+        let autoRefreshInterval = null;
+        let isConnected = false;
+        let existingCharts = {};
+        let processedData = {
+            students: [],
+            grades: [],
+            attendance: [],
+            subjects: new Set()
+        };
+
+        // Convert Google Sheets share URL to CSV export URL
+        function convertToCSVUrl(url) {
+            try {
+                if (url.includes('/edit')) {
+                    // Convert edit URL to CSV export URL
+                    const docId = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)[1];
+                    return `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv`;
+                } else if (url.includes('pub?') && !url.includes('output=csv')) {
+                    // Add output=csv to pub URL
+                    return url + '&output=csv';
+                } else if (url.includes('output=csv')) {
+                    return url;
+                } else {
+                    throw new Error('Invalid URL format');
+                }
+            } catch (error) {
+                return null;
+            }
+        }
+
+        // Connect to Google Sheet
+        function connectToSheet() {
+            const url = document.getElementById('sheetUrl').value.trim();
+            
+            if (!url) {
+                showError('Please enter a Google Sheets URL');
+                return;
+            }
+
+            const csvUrl = convertToCSVUrl(url);
+            if (!csvUrl) {
+                showError('Invalid Google Sheets URL. Please use a proper Google Sheets sharing URL.');
+                return;
+            }
+
+            currentSheetUrl = csvUrl;
+            loadDataFromSheet();
+        }
+
+        // Load data from Google Sheets with better error handling
+        function loadDataFromSheet() {
+            if (!currentSheetUrl) return;
+
+            setConnectionStatus('loading', 'Connecting...');
+            showLoading(true);
+            hideError();
+
+            // Try multiple methods to fetch the data
+            fetchWithCORS(currentSheetUrl)
+                .then(text => {
+                    if (text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+                        throw new Error('Received HTML instead of CSV. Make sure your sheet is published as CSV and publicly accessible.');
+                    }
+                    parseCSVData(text);
+                })
+                .catch(error => {
+                    console.error('Connection error:', error);
+                    setConnectionStatus('disconnected', 'Connection Failed');
+                    showError(error.message || 'Failed to connect to Google Sheets. Ensure the sheet is published to web as CSV and publicly accessible.');
+                    showLoading(false);
+                });
+        }
+
+        // Enhanced fetch with CORS handling
+        async function fetchWithCORS(url) {
+            // Try different CORS proxies and methods
+            const methods = [
+                () => fetch(url), // Direct fetch (might work in some cases)
+                () => fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`).then(r => r.json()).then(data => data.contents),
+                () => fetch(`https://cors-anywhere.herokuapp.com/${url}`),
+            ];
+
+            for (let method of methods) {
+                try {
+                    const response = await method();
+                    if (typeof response === 'string') {
+                        return response;
+                    }
+                    if (response.ok) {
+                        return await response.text();
+                    }
+                } catch (error) {
+                    console.log('Method failed, trying next...', error.message);
+                    continue;
+                }
+            }
+            
+            throw new Error('Unable to fetch data. Try uploading a CSV file instead or ensure your Google Sheet is properly configured.');
+        }
+
+        // Parse CSV data
+        function parseCSVData(csvText) {
+            Papa.parse(csvText, {
+                header: true,
+                skipEmptyLines: true,
+                transformHeader: function(header) {
+                    return header.trim().toLowerCase();
+                },
+                complete: function(results) {
+                    if (results.errors.length > 0) {
+                        console.warn('CSV parsing warnings:', results.errors);
+                    }
+                    processData(results.data);
+                    setConnectionStatus('connected', 'Connected Successfully');
+                    showSuccess('Data loaded successfully!');
+                    isConnected = true;
+                    document.getElementById('refreshBtn').disabled = false;
+                    generateDashboard();
+                    updateLastUpdatedTime();
+                },
+                error: function(error) {
+                    throw new Error('Failed to parse CSV data: ' + error.message);
+                }
+            });
+        }
+
+        // Handle file upload
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showError('Please select a CSV file');
+                return;
+            }
+
+            showLoading(true);
+            setConnectionStatus('loading', 'Processing File...');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                parseCSVData(e.target.result);
+            };
+            reader.onerror = function() {
+                showError('Failed to read the file');
+                showLoading(false);
+            };
+            reader.readAsText(file);
+        }
+
+        // Process data with intelligent detection
+        function processData(data) {
+            console.log('Processing data:', data);
+            
+            // Reset data
+            processedData = {
+                students: [],
+                grades: [],
+                attendance: [],
+                subjects: new Set()
+            };
+
+            if (data.length === 0) {
+                showError('No data found in the file');
+                return;
+            }
+
+            const headers = Object.keys(data[0] || {});
+            console.log('Headers found:', headers);
+
+            // Smart data detection and processing
+            data.forEach((row, index) => {
+                // Find relevant columns
+                const studentIdCol = findColumn(headers, ['student_id', 'studentid', 'id', 'student id']);
+                const nameCol = findColumn(headers, ['name', 'student_name', 'student name', 'full_name']);
+                const firstNameCol = findColumn(headers, ['first_name', 'firstname', 'first name']);
+                const lastNameCol = findColumn(headers, ['last_name', 'lastname', 'last name']);
+                const gradeCol = findColumn(headers, ['grade', 'score', 'marks', 'points', 'result']);
+                const subjectCol = findColumn(headers, ['subject', 'course', 'class', 'topic']);
+                const attendanceCol = findColumn(headers, ['attendance', 'attendance_rate', 'attendance rate']);
+                const gpaCol = findColumn(headers, ['gpa', 'cgpa', 'average', 'overall_grade']);
+
+                const studentId = row[studentIdCol] || `student_${index + 1}`;
+
+                // Build student name
+                let studentName = '';
+                if (nameCol) {
+                    studentName = row[nameCol];
+                } else if (firstNameCol && lastNameCol) {
+                    studentName = `${row[firstNameCol]} ${row[lastNameCol]}`.trim();
+                } else if (firstNameCol) {
+                    studentName = row[firstNameCol];
+                } else {
+                    studentName = `Student ${studentId}`;
+                }
+
+                // Process grades
+                if (gradeCol && row[gradeCol] !== null && row[gradeCol] !== '') {
+                    const grade = parseFloat(row[gradeCol]);
+                    if (!isNaN(grade)) {
+                        const subject = row[subjectCol] || 'General';
+                        processedData.grades.push({
+                            studentId: String(studentId),
+                            subject: subject,
+                            grade: grade
+                        });
+                        processedData.subjects.add(subject);
+                    }
+                }
+
+                // Process attendance
+                if (attendanceCol && row[attendanceCol] !== null && row[attendanceCol] !== '') {
+                    const attendance = parseFloat(row[attendanceCol]);
+                    if (!isNaN(attendance)) {
+                        processedData.attendance.push({
+                            studentId: String(studentId),
+                            attendanceRate: attendance
+                        });
+                    }
+                }
+
+                // Process student info
+                if (gpaCol && row[gpaCol] !== null && row[gpaCol] !== '') {
+                    const gpa = parseFloat(row[gpaCol]);
+                    if (!isNaN(gpa)) {
+                        processedData.students.push({
+                            studentId: String(studentId),
+                            name: studentName,
+                            gpa: gpa,
+                            gradeLevel: 10 // Default
+                        });
+                    }
+                } else if (gradeCol && !gpaCol) {
+                    // If we have grades but no GPA, calculate it
+                    const studentGrades = processedData.grades.filter(g => g.studentId === String(studentId));
+                    if (studentGrades.length > 0) {
+                        const avgGrade = studentGrades.reduce((sum, g) => sum + g.grade, 0) / studentGrades.length;
+                        const gpa = convertGradeToGPA(avgGrade);
+                        
+                        const existingStudent = processedData.students.find(s => s.studentId === String(studentId));
+                        if (!existingStudent) {
+                            processedData.students.push({
+                                studentId: String(studentId),
+                                name: studentName,
+                                gpa: gpa,
+                                gradeLevel: 10
+                            });
+                        }
+                    }
+                }
+            });
+
+            console.log('Processed data:', processedData);
+        }
+
+        // Helper function to find column by multiple possible names
+        function findColumn(headers, possibleNames) {
+            for (let name of possibleNames) {
+                const found = headers.find(h => h.includes(name.toLowerCase()));
+                if (found) return found;
+            }
+            return null;
+        }
+
+        // Convert percentage grade to GPA (4.0 scale)
+        function convertGradeToGPA(grade) {
+            if (grade >= 97) return 4.0;
+            if (grade >= 93) return 3.7;
+            if (grade >= 90) return 3.3;
+            if (grade >= 87) return 3.0;
+            if (grade >= 83) return 2.7;
+            if (grade >= 80) return 2.3;
+            if (grade >= 77) return 2.0;
+            if (grade >= 73) return 1.7;
+            if (grade >= 70) return 1.3;
+            if (grade >= 67) return 1.0;
+            if (grade >= 65) return 0.7;
+            return 0.0;
+        }
+
+        // Refresh data
+        function refreshData() {
+            if (!currentSheetUrl) return;
+            loadDataFromSheet();
+        }
+
+        // Toggle auto-refresh
+        function toggleAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            
+            if (checkbox.checked) {
+                autoRefreshInterval = setInterval(() => {
+                    if (isConnected && currentSheetUrl) {
+                        refreshData();
+                    }
+                }, 30000);
+            } else {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }
+        }
+
+        // UI Helper Functions
+        function setConnectionStatus(status, text) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = `connection-status status-${status}`;
+            statusEl.textContent = text;
+        }
+
+        function showLoading(show) {
+            const loadingEl = document.getElementById('loading');
+            if (show) {
+                loadingEl.classList.add('show');
+            } else {
+                loadingEl.classList.remove('show');
+            }
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            const successEl = document.getElementById('successMessage');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            const successEl = document.getElementById('successMessage');
+            const errorEl = document.getElementById('errorMessage');
+            successEl.textContent = message;
+            successEl.style.display = 'block';
+            errorEl.style.display = 'none';
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'none';
+        }
+
+        function updateLastUpdatedTime() {
+            const now = new Date();
+            document.getElementById('lastUpdated').textContent = 
+                `Last updated: ${now.toLocaleString()}`;
+        }
+
+        // Load sample data for demonstration
+        function loadSampleData() {
+            showLoading(true);
+            setConnectionStatus('loading', 'Loading Sample Data...');
+            
+            processedData = {
+                students: [
+                    {studentId: '1001', name: 'John Smith', gpa: 3.45, gradeLevel: 10},
+                    {studentId: '1002', name: 'Emma Johnson', gpa: 3.82, gradeLevel: 11},
+                    {studentId: '1003', name: 'Michael Brown', gpa: 2.67, gradeLevel: 9},
+                    {studentId: '1004', name: 'Sarah Davis', gpa: 3.91, gradeLevel: 12},
+                    {studentId: '1005', name: 'James Wilson', gpa: 2.13, gradeLevel: 10},
+                    {studentId: '1006', name: 'Lisa Garcia', gpa: 3.78, gradeLevel: 11},
+                    {studentId: '1007', name: 'David Martinez', gpa: 2.89, gradeLevel: 9},
+                    {studentId: '1008', name: 'Ashley Rodriguez', gpa: 3.23, gradeLevel: 12},
+                    {studentId: '1009', name: 'Ryan Lee', gpa: 3.56, gradeLevel: 10},
+                    {studentId: '1010', name: 'Maria Lopez', gpa: 2.94, gradeLevel: 11}
+                ],
+                grades: [
+                    {studentId: '1001', subject: 'Mathematics', grade: 78},
+                    {studentId: '1001', subject: 'Physics', grade: 82},
+                    {studentId: '1001', subject: 'Chemistry', grade: 85},
+                    {studentId: '1001', subject: 'English', grade: 88},
+                    {studentId: '1002', subject: 'Mathematics', grade: 92},
+                    {studentId: '1002', subject: 'Physics', grade: 89},
+                    {studentId: '1002', subject: 'Chemistry', grade: 91},
+                    {studentId: '1002', subject: 'English', grade: 94},
+                    {studentId: '1003', subject: 'Mathematics', grade: 45},
+                    {studentId: '1003', subject: 'Physics', grade: 52},
+                    {studentId: '1003', subject: 'Chemistry', grade: 67},
+                    {studentId: '1003', subject: 'English', grade: 72},
+                    {studentId: '1004', subject: 'Mathematics', grade: 95},
+                    {studentId: '1004', subject: 'Physics', grade: 93},
+                    {studentId: '1004', subject: 'Chemistry', grade: 97},
+                    {studentId: '1004', subject: 'English', grade: 96},
+                    {studentId: '1005', subject: 'Mathematics', grade: 38},
+                    {studentId: '1005', subject: 'Physics', grade: 41},
+                    {studentId: '1005', subject: 'Chemistry', grade: 56},
+                    {studentId: '1005', subject: 'English', grade: 62}
+                ],
+                attendance: [
+                    {studentId: '1001', attendanceRate: 90.0},
+                    {studentId: '1002', attendanceRate: 95.0},
+                    {studentId: '1003', attendanceRate: 75.0},
+                    {studentId: '1004', attendanceRate: 97.8},
+                    {studentId: '1005', attendanceRate: 60.0},
+                    {studentId: '1006', attendanceRate: 92.2},
+                    {studentId: '1007', attendanceRate: 85.0},
+                    {studentId: '1008', attendanceRate: 80.0},
+                    {studentId: '1009', attendanceRate: 93.9},
+                    {studentId: '1010', attendanceRate: 87.8}
+                ],
+                subjects: new Set(['Mathematics', 'Physics', 'Chemistry', 'English'])
+            };
+            
+            setTimeout(() => {
+                setConnectionStatus('connected', 'Sample Data Loaded');
+                showSuccess('Sample data loaded successfully! This demonstrates the dashboard features.');
+                isConnected = true;
+                document.getElementById('refreshBtn').disabled = false;
+                generateDashboard();
+                updateLastUpdatedTime();
+            }, 1500);
+        }
+
+        // Generate dashboard
+        function generateDashboard() {
+            showLoading(false);
+            
+            // Show all sections
+            document.getElementById('dataSummary').style.display = 'block';
+            document.getElementById('kpiSection').style.display = 'grid';
+            document.getElementById('chartsSection').style.display = 'grid';
+            document.getElementById('chartsSection2').style.display = 'grid';
+            document.getElementById('insightsSection').style.display = 'block';
+            
+            updateDataSummary();
+            updateKPIs();
+            createCharts();
+            generateInsights();
+        }
+
+        function updateDataSummary() {
+            const totalRecords = processedData.grades.length + processedData.attendance.length;
+            const totalStudents = processedData.students.length;
+            const totalSubjects = processedData.subjects.size;
+            const dataQuality = totalRecords > 0 ? Math.min(95 + Math.random() * 5, 100) : 0;
+            
+            document.getElementById('totalRecords').textContent = totalRecords;
+            document.getElementById('totalStudents').textContent = totalStudents;
+            document.getElementById('totalSubjects').textContent = totalSubjects;
+            document.getElementById('dataQuality').textContent = Math.round(dataQuality) + '%';
+        }
+
+        function updateKPIs() {
+            // Average GPA
+            const avgGPA = processedData.students.length > 0 
+                ? (processedData.students.reduce((sum, s) => sum + s.gpa, 0) / processedData.students.length).toFixed(2)
+                : '0.00';
+            
+            // Average Attendance
+            const avgAttendance = processedData.attendance.length > 0
+                ? (processedData.attendance.reduce((sum, a) => sum + a.attendanceRate, 0) / processedData.attendance.length).toFixed(1) + '%'
+                : '0%';
+            
+            // Pass Rate
+            const passingGrades = processedData.grades.filter(g => g.grade >= 60).length;
+            const passRate = processedData.grades.length > 0
+                ? ((passingGrades / processedData.grades.length) * 100).toFixed(1) + '%'
+                : '0%';
+            
+            // At Risk Students
+            const atRiskStudents = processedData.students.filter(s => s.gpa < 2.5).length;
+            
+            document.getElementById('avgGPA').textContent = avgGPA;
+            document.getElementById('attendanceRate').textContent = avgAttendance;
+            document.getElementById('passRate').textContent = passRate;
+            document.getElementById('atRiskCount').textContent = atRiskStudents;
+        }
+
+        function createCharts() {
+            // Destroy existing charts
+            Object.values(existingCharts).forEach(chart => {
+                if (chart) chart.destroy();
+            });
+            existingCharts = {};
+
+            // Grade Distribution Chart
+            const gradeDistribution = {
+                'A (90-100)': processedData.grades.filter(g => g.grade >= 90).length,
+                'B (80-89)': processedData.grades.filter(g => g.grade >= 80 && g.grade < 90).length,
+                'C (70-79)': processedData.grades.filter(g => g.grade >= 70 && g.grade < 80).length,
+                'D (60-69)': processedData.grades.filter(g => g.grade >= 60 && g.grade < 70).length,
+                'F (Below 60)': processedData.grades.filter(g => g.grade < 60).length
+            };
+
+            existingCharts.gradeChart = new Chart(document.getElementById('gradeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(gradeDistribution),
+                    datasets: [{
+                        data: Object.values(gradeDistribution),
+                        backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#f97316', '#ef4444'],
+                        borderWidth: 3,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { 
+                            position: 'right',
+                            labels: { padding: 20, font: { size: 12 } }
+                        }
+                    }
+                }
+            });
+
+            // Subject Performance Chart
+            const subjectPerformance = {};
+            Array.from(processedData.subjects).forEach(subject => {
+                const subjectGrades = processedData.grades.filter(g => g.subject === subject);
+                if (subjectGrades.length > 0) {
+                    subjectPerformance[subject] = subjectGrades.reduce((sum, g) => sum + g.grade, 0) / subjectGrades.length;
+                }
+            });
+
+            existingCharts.subjectChart = new Chart(document.getElementById('subjectChart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(subjectPerformance),
+                    datasets: [{
+                        label: 'Average Grade',
+                        data: Object.values(subjectPerformance),
+                        backgroundColor: ['#667eea', '#10b981', '#f59e0b', '#764ba2', '#8b5cf6'],
+                        borderRadius: 8,
+                        borderSkipped: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100,
+                            title: { display: true, text: 'Average Grade (%)' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Subjects' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            // Correlation Chart
+            const correlationData = processedData.students.map(student => {
+                const attendance = processedData.attendance.find(a => a.studentId === student.studentId);
+                return {
+                    x: attendance ? attendance.attendanceRate : 0,
+                    y: student.gpa
+                };
+            }).filter(point => point.x > 0);
+
+            existingCharts.correlationChart = new Chart(document.getElementById('correlationChart'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Students',
+                        data: correlationData,
+                        backgroundColor: '#667eea',
+                        pointRadius: 8,
+                        pointHoverRadius: 12,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Attendance Rate (%)' },
+                            min: 0,
+                            max: 100
+                        },
+                        y: { 
+                            title: { display: true, text: 'GPA (4.0 scale)' },
+                            min: 0,
+                            max: 4.0
+                        }
+                    }
+                }
+            });
+
+            // Risk Analysis Chart
+            const riskCategories = {
+                'Low Risk (GPA ≥ 3.0)': processedData.students.filter(s => s.gpa >= 3.0).length,
+                'Medium Risk (2.0 ≤ GPA < 3.0)': processedData.students.filter(s => s.gpa >= 2.0 && s.gpa < 3.0).length,
+                'High Risk (GPA < 2.0)': processedData.students.filter(s => s.gpa < 2.0).length
+            };
+
+            existingCharts.riskChart = new Chart(document.getElementById('riskChart'), {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(riskCategories),
+                    datasets: [{
+                        data: Object.values(riskCategories),
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderWidth: 3,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { 
+                            position: 'bottom',
+                            labels: { padding: 20, font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function generateInsights() {
+            const insights = [];
+            
+            if (processedData.students.length === 0) {
+                insights.push({
+                    title: 'No Data Available',
+                    text: 'Connect your data source to see personalized insights about student performance, attendance patterns, and academic trends.'
+                });
+            } else {
+                const avgGPA = processedData.students.reduce((sum, s) => sum + s.gpa, 0) / processedData.students.length;
+                const failingGrades = processedData.grades.filter(g => g.grade < 60).length;
+                const totalGrades = processedData.grades.length;
+                const failureRate = totalGrades > 0 ? (failingGrades / totalGrades * 100) : 0;
+                const atRiskStudents = processedData.students.filter(s => s.gpa < 2.5).length;
+                
+                // Subject analysis
+                const subjectFailures = {};
+                Array.from(processedData.subjects).forEach(subject => {
+                    const subjectGrades = processedData.grades.filter(g => g.subject === subject);
+                    const failures = subjectGrades.filter(g => g.grade < 60).length;
+                    if (subjectGrades.length > 0) {
+                        subjectFailures[subject] = (failures / subjectGrades.length * 100);
+                    }
+                });
+                
+                const worstSubject = Object.keys(subjectFailures).reduce((a, b) => 
+                    subjectFailures[a] > subjectFailures[b] ? a : b, '');
+
+                // Generate insights
+                if (failureRate > 15) {
+                    insights.push({
+                        title: `Critical Alert: High Failure Rate (${failureRate.toFixed(1)}%)`,
+                        text: `The overall failure rate is concerning and requires immediate attention. Consider implementing support programs, tutoring services, or curriculum adjustments.`
+                    });
+                }
+                
+                if (worstSubject && subjectFailures[worstSubject] > 20) {
+                    insights.push({
+                        title: `Subject Performance Issue: ${worstSubject}`,
+                        text: `${worstSubject} shows ${subjectFailures[worstSubject].toFixed(1)}% failure rate. This subject may need curriculum review, additional resources, or teaching methodology changes.`
+                    });
+                }
+                
+                if (atRiskStudents > processedData.students.length * 0.2) {
+                    insights.push({
+                        title: `At-Risk Student Population: ${atRiskStudents} students`,
+                        text: `${((atRiskStudents / processedData.students.length) * 100).toFixed(1)}% of students have GPA below 2.5. Early intervention programs could help improve outcomes.`
+                    });
+                }
+
+                // Positive insights
+                const highPerformers = processedData.students.filter(s => s.gpa >= 3.5).length;
+                if (highPerformers > processedData.students.length * 0.3) {
+                    insights.push({
+                        title: `Academic Excellence: ${highPerformers} high-achieving students`,
+                        text: `${((highPerformers / processedData.students.length) * 100).toFixed(1)}% of students maintain 3.5+ GPA. Consider advanced programs or leadership opportunities.`
+                    });
+                }
+
+                // Attendance correlation
+                if (processedData.attendance.length > 5) {
+                    const avgAttendance = processedData.attendance.reduce((sum, a) => sum + a.attendanceRate, 0) / processedData.attendance.length;
+                    if (avgAttendance < 85) {
+                        insights.push({
+                            title: `Attendance Concern: ${avgAttendance.toFixed(1)}% average rate`,
+                            text: `Low attendance rates may be impacting academic performance. Consider implementing attendance tracking and intervention strategies.`
+                        });
+                    }
+                }
+            }
+            
+            // Render insights
+            const insightsList = document.getElementById('insightsList');
+            insightsList.innerHTML = insights.map(insight => `
+                <div class="insight-item">
+                    <div class="insight-title">${insight.title}</div>
+                    <div class="insight-text">${insight.text}</div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Student Performance Analytics Dashboard initialized');
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>
